@@ -6,12 +6,26 @@ import numpy as np
 import torch
 
 
+class _ExportWrapper(torch.nn.Module):
+    """Expose an unambiguous three-input forward for ONNX tracing."""
+    def __init__(self, model: torch.nn.Module) -> None:
+        super().__init__()
+        self.model = model
+
+    def forward(self, image: torch.Tensor, telemetry: torch.Tensor, trap_count: torch.Tensor) -> torch.Tensor:
+        output = self.model(image, telemetry, trap_count)
+        # Export must contain only the scalar regression tensor, never XAI auxiliaries.
+        return output[0] if isinstance(output, tuple) else output
+
+
 def export_onnx(model: torch.nn.Module, path: str | Path, image: torch.Tensor, telemetry: torch.Tensor, trap_count: torch.Tensor, *, opset: int = 17) -> Path:
     """Export a model with dynamic batch and telemetry-time axes."""
     destination = Path(path); destination.parent.mkdir(parents=True, exist_ok=True); model.eval().cpu()
+    export_model = _ExportWrapper(model).eval()
     try:
-        torch.onnx.export(model, (image.cpu(), telemetry.cpu(), trap_count.cpu()), str(destination), input_names=["image", "telemetry", "trap_count"], output_names=["pest_density"], dynamic_axes={"image": {0: "batch"}, "telemetry": {0: "batch", 1: "time"}, "trap_count": {0: "batch"}, "pest_density": {0: "batch"}}, opset_version=opset)
-    except (ImportError, RuntimeError, ValueError) as exc:
+        args = (image.cpu(), telemetry.cpu(), trap_count.cpu())
+        torch.onnx.export(export_model, args, str(destination), input_names=["image", "telemetry", "trap_count"], output_names=["pest_density"], dynamic_axes={"image": {0: "batch"}, "telemetry": {0: "batch", 1: "time"}, "trap_count": {0: "batch"}, "pest_density": {0: "batch"}}, opset_version=opset)
+    except (ImportError, RuntimeError, TypeError, ValueError) as exc:
         raise RuntimeError("ONNX export failed; install torch.onnx dependencies") from exc
     return destination
 
