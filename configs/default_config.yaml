@@ -1,0 +1,32 @@
+seed: 42
+paths:
+  telemetry_csv: null
+  image_root: null
+  output_dir: outputs
+data:
+  telemetry_window: 24
+  num_features: 3
+  train_samples: 128
+  validation_samples: 48
+  image_size: 96
+  batch_size: 16
+  num_workers: 0
+  use_synthetic_telemetry: true
+model:
+  vision_backbone: mobilenet_v3_small
+  pretrained: false
+  feature_dim: 96
+  temporal_encoder: lstm
+  hidden_dim: 96
+  num_heads: 4
+  dropout: 0.15
+training:
+  epochs: 3
+  learning_rate: 0.001
+  weight_decay: 0.00001
+deployment:
+  quantize: false
+  export_onnx: false
+  onnx_path: outputs/transfarmer.onnx
+  opset: 17
+  xai_enabled: true
